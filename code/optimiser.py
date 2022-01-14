@@ -26,6 +26,8 @@ class DirNewton(torch.optim.Optimizer):
         if self.prev_loss is not None:
             loss_delta = loss - self.prev_loss
 
+        grad_norm_squared = 0
+
         for group in self.param_groups:
             params_with_grad = []
             grads = []
@@ -34,10 +36,6 @@ class DirNewton(torch.optim.Optimizer):
             ddecay = group["ddecay"]
             weight_decay = group["weight_decay"]
 
-
-            # should be norm over all gradients
-            # TODO think whether or not this bug is a feature
-            grad_norm_squared = 0
 
             for param in group["params"]:
                 if param.grad is not None:
@@ -61,7 +59,13 @@ class DirNewton(torch.optim.Optimizer):
                     nesterov=False
                 )
 
-            new_dderivative_estimate = 2 / lr * (1 + loss_delta / grad_norm_squared)
-            self.state[group]["lr"] = 1 / ((1 - ddecay) / lr + new_dderivative_estimate)
 
+        for group in self.param_groups:
+            old_dderivative_estimate = 1/self.state[group]["lr"]
+            new_dderivative_estimate = 2 * old_dderivative_estimate * (1 + loss_delta / grad_norm_squared)
+            self.state[group]["lr"] = 1 / (
+                (1 - ddecay)*old_dderivative_estimate
+                + ddecay*new_dderivative_estimate
+            )
+        
         return loss
