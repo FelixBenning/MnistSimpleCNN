@@ -17,6 +17,7 @@ from transforms import RandomRotation
 from models.modelM3 import ModelM3
 from models.modelM5 import ModelM5
 from models.modelM7 import ModelM7
+from optimiser import DirNewton
 
 def run(p_seed=0, p_epochs=150, p_kernel_size=5, p_logdir="temp"):
     # random number generator seed ------------------------------------------------#
@@ -70,8 +71,8 @@ def run(p_seed=0, p_epochs=150, p_kernel_size=5, p_logdir="temp"):
 
     # hyperparameter selection ----------------------------------------------------#
     ema = EMA(model, decay=0.999)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98)
+    optimizer = DirNewton(model.parameters())
+    # lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98)
 
     # delete result file ----------------------------------------------------------#
     f = open(OUTPUT_FILE, 'w')

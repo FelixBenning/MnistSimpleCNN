@@ -11,13 +11,18 @@ class DirNewton(torch.optim.Optimizer):
         # not have custom parameters
         super().__init__(params, default)
 
-        for group in self.param_groups:
-            self.state[group]["lr"] = group["initial_lr"]
+
+        if len(self.param_groups) != 1:
+            raise ValueError("DirNewton doesn't support per-parameter options "
+                             "(parameter groups)")
+
+        for group in self.param_groups: # TODO: fix for parameter groups
+            self.state["lr"] = group["initial_lr"]
 
     def __setstate__(self, state: dict) -> None:
         super().__setstate__(state)
 
-    @torch.no_grad
+    @torch.no_grad()
     def step(self, closure=None):
         with torch.enable_grad():
             loss = float(closure())
@@ -28,7 +33,7 @@ class DirNewton(torch.optim.Optimizer):
 
         grad_norm_squared = 0
 
-        for group in self.param_groups:
+        for group in self.param_groups: # there is only one
             params_with_grad = []
             grads = []
             momentum_buffer_list = []
@@ -59,13 +64,15 @@ class DirNewton(torch.optim.Optimizer):
                     nesterov=False
                 )
 
-
-        for group in self.param_groups:
-            old_dderivative_estimate = 1/self.state[group]["lr"]
+            #TODO: fix for parameter groups
+            old_dderivative_estimate = 1/self.state["lr"]
             new_dderivative_estimate = 2 * old_dderivative_estimate * (1 + loss_delta / grad_norm_squared)
-            self.state[group]["lr"] = 1 / (
+            self.state["lr"] = 1 / (
                 (1 - ddecay)*old_dderivative_estimate
                 + ddecay*new_dderivative_estimate
             )
         
         return loss
+
+if __name__ == "__main__":
+    pass
