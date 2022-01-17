@@ -92,14 +92,17 @@ def run(p_seed=0, p_epochs=150, p_kernel_size=5, p_logdir="temp"):
         train_corr = 0
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device, dtype=torch.int64)
-            optimizer.zero_grad()
-            output = model(data)
-            loss = F.nll_loss(output, target)
-            train_pred = output.argmax(dim=1, keepdim=True)
-            train_corr += train_pred.eq(target.view_as(train_pred)).sum().item()
-            train_loss += F.nll_loss(output, target, reduction='sum').item()
-            loss.backward()
-            optimizer.step()
+            def closure():
+                optimizer.zero_grad()
+                output = model(data)
+                loss = F.nll_loss(output, target)
+                train_pred = output.argmax(dim=1, keepdim=True)
+                # train_corr += train_pred.eq(target.view_as(train_pred)).sum().item()
+                # train_loss += F.nll_loss(output, target, reduction='sum').item()
+                loss.backward()
+                return loss
+            loss = optimizer.step(closure)
+            train_loss += loss.item()
             g_step += 1
             ema(model, g_step)
             if batch_idx % 100 == 0:

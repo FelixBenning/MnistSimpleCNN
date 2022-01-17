@@ -5,7 +5,6 @@ import torch.optim._functional as F
 class DirNewton(torch.optim.Optimizer):
     def __init__(self, params, initial_lr=1e-3, ddecay=0.1, weight_decay=0) -> None:
         default = dict(initial_lr=initial_lr, ddecay=ddecay, weight_decay=weight_decay)
-        self.prev_loss = None
 
         # adds params to param_groups and inserts defaults to groups if they do
         # not have custom parameters
@@ -18,6 +17,8 @@ class DirNewton(torch.optim.Optimizer):
 
         for group in self.param_groups: # TODO: fix for parameter groups
             self.state["lr"] = group["initial_lr"]
+        
+        self.state["prev_loss"] = None
 
     def __setstate__(self, state: dict) -> None:
         super().__setstate__(state)
@@ -25,11 +26,11 @@ class DirNewton(torch.optim.Optimizer):
     @torch.no_grad()
     def step(self, closure=None):
         with torch.enable_grad():
-            loss = float(closure())
+            loss = closure()
 
         loss_delta = None
-        if self.prev_loss is not None:
-            loss_delta = loss - self.prev_loss
+        if self.state["prev_loss"] is not None:
+            loss_delta = loss - self.state["prev_loss"]
 
         grad_norm_squared = 0
 
@@ -37,7 +38,7 @@ class DirNewton(torch.optim.Optimizer):
             params_with_grad = []
             grads = []
             momentum_buffer_list = []
-            lr = self.state[group]["lr"]
+            lr = self.state["lr"]
             ddecay = group["ddecay"]
             weight_decay = group["weight_decay"]
 
@@ -48,7 +49,7 @@ class DirNewton(torch.optim.Optimizer):
                     grads.append(param.grad)
                     grad_norm_squared += torch.sum(torch.pow(param.grad, 2.))
 
-                    state = self.state[p]
+                    state = self.state[param]
                     if "momentum_buffer" not in state:
                         momentum_buffer_list.append(None)
                     else:
@@ -60,17 +61,20 @@ class DirNewton(torch.optim.Optimizer):
                     momentum_buffer_list,
                     weight_decay=weight_decay,
                     momentum=0,
+                    lr=lr,
                     dampening=0,
                     nesterov=False
                 )
 
-            #TODO: fix for parameter groups
-            old_dderivative_estimate = 1/self.state["lr"]
-            new_dderivative_estimate = 2 * old_dderivative_estimate * (1 + loss_delta / grad_norm_squared)
-            self.state["lr"] = 1 / (
-                (1 - ddecay)*old_dderivative_estimate
-                + ddecay*new_dderivative_estimate
-            )
+            if loss_delta:
+                #TODO: fix for parameter groups
+                old_dderivative_estimate = 1/self.state["lr"]
+                new_dderivative_estimate = 2 * old_dderivative_estimate * (1 + loss_delta / grad_norm_squared)
+                self.state["lr"] = 1 / (
+                    (1 - ddecay)*old_dderivative_estimate
+                    + ddecay*new_dderivative_estimate
+                )
+        self.state["prev_loss"] = loss 
         
         return loss
 
